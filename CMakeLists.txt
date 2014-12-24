@@ -5,13 +5,16 @@ project(CC2540)
 ## Target
 set(CC2540_HEADERS
     src/BLE.h
+    src/BLEDevice.h
     src/AsyncSerial.h
     src/HCICodes.h
+    src/Singleton.h
 )
 set(CC2540_SRCS
     src/test.cpp
     src/AsyncSerial.cpp
     src/BLE.cpp
+    src/BLEDevice.cpp
 )
 
 add_executable(CC2540 ${CC2540_SRCS} ${CC2540_HEADERS})

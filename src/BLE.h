@@ -6,6 +6,7 @@
 #include <vector>
 #include "HCIEvents.h"
 #include "HCICodes.h"
+#include "BLEDevice.h"
 
 #define IRK_LEN                         0x10
 #define IRK_POS                         0x0F
@@ -19,8 +20,10 @@
 
 #define DEBUG
 using std::vector;
+namespace framework {
 
-class BLE {
+class BLE :public Singleton<BLE> {
+    friend class Singleton<BLE>;
 public:
     BLE();
     virtual ~BLE();
@@ -31,7 +34,10 @@ public:
     bool getDongleAddress(std::vector<char> &addr);
     bool getModuleIRK(std::vector<char> &irk);
     bool getModuleCSRK(std::vector<char> &csrk);
-    bool *getModuleStatus();
+    bool getModuleStatus(bool &status);
+    bool getModuleStatus();
+    bool getScanResultList(BLEDevice *list);
+    bool *getModuleStatus1();
 
 private:
     std::vector<char> dongle_address;
@@ -40,11 +46,14 @@ private:
     std::vector<char> csrk;
     bool is_module_initialized;
     bool is_received;
+    bool scan_finished;
     int number_of_device_found;
-    std::vector<BLEDevice> devices_found;
+    std::vector<std::string> devices_found;
+    BLEDevice *devices_list;
 
 
     bool setDongleAddress(const char *addr);
+    bool setModuleStatus(bool status);
 
     bool setModuleIRK(const char *irk);
     bool setModuleCSRK(const char *csrk);
@@ -63,28 +72,6 @@ private:
 
 };
 
-class BLEDevice {
-public:
-    BLEDevice();
-    virtual ~BLEDevice();
-    bool setAddressType(unsigned char &type);
-    bool setEventType(unsigned char &type);
-    bool setAddress(const char *addr);
-    bool setRSSIValue(unsigned char &value);
-    bool setDeviceData(const char *data);
-
-    bool getAddressType(unsigned char &type);
-    bool getEventType(unsigned char &type);
-    bool getRSSIValue(unsigned char &value);
-    bool getAddress(std::vector<char> &addr);
-    bool getDeviceData(std::vector<char> &data);
-private:
-    unsigned char addr_type;
-    unsigned char event_type;
-    unsigned char rssi_value;
-    std::vector<char> addr;
-    std::vector<char> device_data;
-
-};
+}
 
 #endif

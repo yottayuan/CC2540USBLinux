@@ -1,5 +1,6 @@
 #include "BLE.h"
 #include "HCICodes.h"
+using namespace framework;
 
 BLE::BLE():is_module_initialized(false), is_received(false) {
 
@@ -119,8 +120,23 @@ bool BLE::getDongleAddress(std::vector<char> &addr) {
     return true;
 }
 
-bool *BLE::getModuleStatus() {
-    return &is_module_initialized;
+bool BLE::setModuleStatus(bool status) {
+    printf("setModuleStatus(%d)\n",status);
+    /*this->*/is_module_initialized = status;
+    printf("setModuleStatus : %d\n", /*this->*/is_module_initialized);
+    return true;
+}
+
+bool BLE::getModuleStatus(bool &status) {
+    printf("getModuleStatus : %d\n", /*this->*/is_module_initialized);
+    status = /*this->*/is_module_initialized;
+    printf("getModuleStatus : %d\n", status);
+    return true;
+}
+
+bool BLE::getModuleStatus() {
+    printf("getModuleStatus : %d\n", /*this->*/is_module_initialized);
+    return is_module_initialized;
 }
 
 bool BLE::setModuleIRK(const char *irk) {
@@ -224,8 +240,7 @@ bool BLE::processEventGAPDeviceDone(const char *data, unsigned int len) {
     setDongleAddress(data+ADDR_POS);
     setModuleIRK(data+IRK_POS);
     setModuleCSRK(data+CSRK_POS);
-    this->is_module_initialized = true;
-    printf("Module status: %d\n", this->is_module_initialized);
+    setModuleStatus(true);
     return true;
 }
 
@@ -238,7 +253,7 @@ bool BLE::processEventGAPDeviceDiscovery(const char *data, unsigned int len) {
 #endif
         } else {
 #if defined (DEBUG)
-            printf("Device discovery done, found %d device(s)\n", data[DEVICE_DISCOVERY_STATUS_POS + 1]);
+            printf("Device discovery done, found %d device(s)\n", number_of_device_found);
 #endif
 //            devices_found.clear();
 //            for(int i = 0; i<number_of_device_found; i++) {
@@ -248,6 +263,14 @@ bool BLE::processEventGAPDeviceDiscovery(const char *data, unsigned int len) {
 //                device.setAddress(data+DEVICE_DISCOVERY_STATUS_POS + 4+ i*8);
 //                devices_found.push_back(device);
 //            }
+            for(int i = 0; i< devices_found.size(); i++) {
+                std::string device = devices_found[i];
+                //device = device.substr(0x08, 0x0F);
+                for(int j = 0; j < device.size(); j++) {
+                    printf("%02x ", (unsigned char)device[j]);
+                }
+                printf("\n");
+            }
         }
     }
     return true;
@@ -270,21 +293,29 @@ bool BLE::processEventGAPDeviceInfomation(const char *data, unsigned int len) {
     // 0x0F: dataLen
     // 0x10: dataField
     if (data[DEVICE_INFOMATION_STATUS_POS] == 0x00) {
-        BLEDevice device = BLEDevice();
-        device.setEventType(data[DEVICE_INFOMATION_STATUS_POS +1]);
-        device.setAddressType(data[DEVICE_INFOMATION_STATUS_POS +2]);
-        device.setAddress(data+DEVICE_INFOMATION_STATUS_POS +3);
-        device.setRSSIValue(data[data+DEVICE_INFOMATION_STATUS_POS +9]);
-        devices_found.push_back(device);
-        printf("Found device :");
-        unsigned char rssi = 0;
-        std::vector<char> addr;
-        device.getAddress(addr);
-        for (int i = 0; i< 0x06; i++) {
-            printf("");
+//        BLEDevice device = BLEDevice();
+//        device.setEventType((unsigned char)data[DEVICE_INFOMATION_STATUS_POS +1]);
+//        device.setAddressType((unsigned char)data[DEVICE_INFOMATION_STATUS_POS +2]);
+//        device.setAddress(data+DEVICE_INFOMATION_STATUS_POS +3);
+//        device.setRSSIValue((unsigned char)data[data+DEVICE_INFOMATION_STATUS_POS +9]);
+
+        std::string device (data, len);
+        device = device.substr(DEVICE_INFOMATION_STATUS_POS + 3);
+        printf("\nDevice: ");
+        for(int i = 0; i <device.size(); i++) {
+            printf("%02x: %c ", (unsigned char)device[i], (unsigned char)device[i]);
         }
-        device.getRSSIValue(rssi);
-        printf("with RSSI: %02x\n", rssi);
+        printf("\n");
+        devices_found.push_back(device);
+//        printf("Found device :");
+//        unsigned char rssi = 0;
+//        std::vector<char> addr;
+//        device.getAddress(addr);
+//        for (int i = 0; i< 0x06; i++) {
+//            printf("");
+//        }
+//        device.getRSSIValue(rssi);
+//        printf("with RSSI: %02x\n", rssi);
     } else {
 
     }
