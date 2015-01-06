@@ -46,11 +46,11 @@ int main()
     cmd.clear();
     cmd = BLE::Instance()->getGAPCommand(GAP_DEVICE_DISCOVERY_REQUEST,data);
     serial.write(cmd);
-    for(int i = 0; i<cmd.size(); i++) {
-        printf("%02x:", (unsigned char)cmd[i]);
-        if((i%16 == 0)&& i!=0) printf("\n");
-    }
-    printf("\n");
+//    for(int i = 0; i<cmd.size(); i++) {
+//        printf("%02x:", (unsigned char)cmd[i]);
+//        if((i%16 == 0)&& i!=0) printf("\n");
+//    }
+//    printf("\n");
     while(true);
     boost::this_thread::sleep(boost::posix_time::seconds(3));
 //    while(true) {

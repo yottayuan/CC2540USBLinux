@@ -1,3 +1,18 @@
+/*
+    Copyright (C) 2015  Robot Team - FTI - FPT Corp
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+ */
 #include "BLE.h"
 #include "HCICodes.h"
 using namespace framework;
@@ -91,12 +106,14 @@ std::vector<char> BLE::getGATTCommand(unsigned char cmd, std::vector<char> data)
 
 void BLE::received(const char *data, unsigned int len) {
     is_received = false;
+#if defined (DEBUG)
     printf("============================================\n");
     for(int i = 0; i<len; i++) {
         printf("%02x:", (unsigned char)*(data+i));
         if((i%16 == 0)&& i!=0) printf("\n");
     }
     printf("\nDone !\n");
+#endif
     processHCIEvents(data,len);
     is_received = true;
 }
@@ -108,10 +125,10 @@ bool BLE::setDongleAddress(const char *addr) {
     }
 #if defined (DEBUG)
     for (int i = 0; i < ADDR_LEN; i++) {
-        printf("%02x:",(unsigned char)this->dongle_address[i]);
+        printf("%02x ",(unsigned char)this->dongle_address[i]);
     }
-#endif
     printf("\n");
+#endif
     return true;
 }
 
@@ -121,21 +138,16 @@ bool BLE::getDongleAddress(std::vector<char> &addr) {
 }
 
 bool BLE::setModuleStatus(bool status) {
-    printf("setModuleStatus(%d)\n",status);
-    /*this->*/is_module_initialized = status;
-    printf("setModuleStatus : %d\n", /*this->*/is_module_initialized);
+    is_module_initialized = status;
     return true;
 }
 
 bool BLE::getModuleStatus(bool &status) {
-    printf("getModuleStatus : %d\n", /*this->*/is_module_initialized);
-    status = /*this->*/is_module_initialized;
-    printf("getModuleStatus : %d\n", status);
+    status = is_module_initialized;
     return true;
 }
 
 bool BLE::getModuleStatus() {
-    printf("getModuleStatus : %d\n", /*this->*/is_module_initialized);
     return is_module_initialized;
 }
 
@@ -216,8 +228,8 @@ bool BLE::processHCIEvents(const char *data, unsigned int len) {
         } else if ((unsigned char)data[1] == LOW_ENERGY) {
 
         } else if ((unsigned char)data[1] == COMMAND_COMPLETE) {
-            printf("Command complete !\n");
 #if defined (DEBUG)
+            printf("Command complete !\n");
             printf("Data len: %d\n", data[2]);
             printf("Data Code: %02x%02x \n",(unsigned char)data[4], (unsigned char)data[3]);
             printf("Data: ");
@@ -248,21 +260,16 @@ bool BLE::processEventGAPDeviceDiscovery(const char *data, unsigned int len) {
     if(data[DEVICE_DISCOVERY_STATUS_POS] == 0x00) {
         number_of_device_found = data[DEVICE_DISCOVERY_STATUS_POS + 1];
         if(number_of_device_found == 0) {
-#if defined (DEBUG)
+//#if defined (DEBUG)
             printf("Device discovery done, no device found\n");
-#endif
+//#endif
         } else {
-#if defined (DEBUG)
             printf("Device discovery done, found %d device(s)\n", number_of_device_found);
-#endif
-//            devices_found.clear();
-//            for(int i = 0; i<number_of_device_found; i++) {
-//                BLEDevice device = BLEDevice();
-//                device.setAddressType(data[DEVICE_DISCOVERY_STATUS_POS + 3 + i*8]);
-//                device.setEventType(data[DEVICE_DISCOVERY_STATUS_POS + 2 + i*8]);
-//                device.setAddress(data+DEVICE_DISCOVERY_STATUS_POS + 4+ i*8);
-//                devices_found.push_back(device);
-//            }
+            if(devices_list != NULL) {
+                delete [] devices_list;
+            }
+            devices_list = new BLEDevice[number_of_device_found];
+#if defined (DEBUG)
             for(int i = 0; i< devices_found.size(); i++) {
                 std::string device = devices_found[i];
                 //device = device.substr(0x08, 0x0F);
@@ -270,6 +277,22 @@ bool BLE::processEventGAPDeviceDiscovery(const char *data, unsigned int len) {
                     printf("%02x ", (unsigned char)device[j]);
                 }
                 printf("\n");
+            }
+#endif
+            for(int i = 0; i< number_of_device_found; i++) {
+                BLEDevice *device = new BLEDevice(devices_found[i].c_str(),devices_found[i].size());
+                devices_list[i] = *device;
+                char *addr;
+                addr = device->getAddress();
+                printf("Addr: ");
+                for(int j = 0; j < 0x06; j++) {
+                    printf("%02x ", (unsigned char)addr[j]);
+                }
+                printf ("\n");
+                char rssi;
+                device->getRSSIValue(rssi);
+                printf ("RSSI: %d\n",rssi);
+
             }
         }
     }
@@ -287,6 +310,11 @@ bool BLE::processEventGAPLinkTerminated(const char *data, unsigned int len) {
 bool BLE::processEventGAPDeviceInfomation(const char *data, unsigned int len) {
     // 0x05: status
     // 0x06: event type
+    //          0x00: Connectable undirected advertisement
+    //          0x01: Connectable directed advertisement
+    //          0x02: Discoverable undirected advertisement
+    //          0x03: Non-connectable undirected advertisement
+    //          0x04: Scan response
     // 0x07: addr type
     // 0x08: addr (6 bytes)
     // 0x0E: rssi
@@ -301,12 +329,26 @@ bool BLE::processEventGAPDeviceInfomation(const char *data, unsigned int len) {
 
         std::string device (data, len);
         device = device.substr(DEVICE_INFOMATION_STATUS_POS + 3);
+#if defined (DEBUG)
         printf("\nDevice: ");
         for(int i = 0; i <device.size(); i++) {
             printf("%02x: %c ", (unsigned char)device[i], (unsigned char)device[i]);
         }
         printf("\n");
-        devices_found.push_back(device);
+#endif
+        if(data[DEVICE_INFOMATION_STATUS_POS+1] == 0x00) { // Event type
+#if defined (DEBUG)
+            printf("\nDevice: ");
+            for(int i = 0; i <device.size(); i++) {
+                printf("%02x ", (unsigned char)device[i]);
+            }
+            printf("\n");
+#endif
+            devices_found.push_back(device);
+        } else if (data[DEVICE_INFOMATION_STATUS_POS+1] == 0x04) {
+
+
+        }
 //        printf("Found device :");
 //        unsigned char rssi = 0;
 //        std::vector<char> addr;

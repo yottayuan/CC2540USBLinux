@@ -1,3 +1,18 @@
+/*
+    Copyright (C) 2015  Robot Team - FTI - FPT Corp
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+ */
 #ifndef BLE_H
 #define BLE_H
 
@@ -18,7 +33,7 @@
 #define DEVICE_DISCOVERY_STATUS_POS     0x05
 #define DEVICE_INFOMATION_STATUS_POS    0x05
 
-#define DEBUG
+//#define DEBUG
 using std::vector;
 namespace framework {
 
@@ -37,7 +52,6 @@ public:
     bool getModuleStatus(bool &status);
     bool getModuleStatus();
     bool getScanResultList(BLEDevice *list);
-    bool *getModuleStatus1();
 
 private:
     std::vector<char> dongle_address;
