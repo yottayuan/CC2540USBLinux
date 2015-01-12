@@ -19,21 +19,28 @@
 #include <iostream>
 #include <stdio.h>
 #include <vector>
+#include <boost/thread.hpp>
 #include "HCIEvents.h"
 #include "HCICodes.h"
 #include "BLEDevice.h"
+#include <math.h>
 
 #define IRK_LEN                         0x10
-#define IRK_POS                         0x0F
+#define IRK                             0x0F
 #define CSRK_LEN                        0x10
-#define CSRK_POS                        0x1F
+#define CSRK                            0x1F
 #define ADDR_LEN                        0x06
-#define ADDR_POS                        0x06
+#define DEVICE_ADDR                     0x06
 
-#define DEVICE_DISCOVERY_STATUS_POS     0x05
-#define DEVICE_INFOMATION_STATUS_POS    0x05
+#define DEVICE_DISCOVERY_STATUS         0x05
+#define DEVICE_INFOMATION_STATUS        0x05
+#define RSP_DEVICE_ADDR                 0x08
+#define RSP_DEVICE_RSSI                 0x0E
+#define RSP_DEVICE_DATA_LEN             0x0F
+#define RSP_DEVICE_DATA_FIELD           0x10
 
-//#define DEBUG
+//#define DEBUG_MSG
+//#define TEST_CODE
 using std::vector;
 namespace framework {
 
@@ -47,42 +54,39 @@ public:
     std::vector<char> getATTCommand(unsigned char cmd, std::vector<char> data);
     void received(const char *data, unsigned int len);
     bool getDongleAddress(std::vector<char> &addr);
-    bool getModuleIRK(std::vector<char> &irk);
-    bool getModuleCSRK(std::vector<char> &csrk);
-    bool getModuleStatus(bool &status);
-    bool getModuleStatus();
+    bool isModuleInitialized();
+    bool isSendCMDCompleted();
+    bool isScanFinished();
     bool getScanResultList(BLEDevice *list);
+    bool clearDevicesList();
+    bool isiBeaconDevice(std::vector<char> data);
+    bool isValidAddr(std::string addr);
 
 private:
     std::vector<char> dongle_address;
-    unsigned char dongle_addr_type;
-    std::vector<char> irk;
-    std::vector<char> csrk;
-    bool is_module_initialized;
-    bool is_received;
+    bool module_initialized;
     bool scan_finished;
+    bool send_cmd_completed;
     int number_of_device_found;
     std::vector<std::string> devices_found;
-    BLEDevice *devices_list;
 
+    std::vector<char> received_data;
+    boost::mutex readQueueMutex;
 
-    bool setDongleAddress(const char *addr);
-    bool setModuleStatus(bool status);
+    bool setDongleAddress(std::vector<char> addr);
 
-    bool setModuleIRK(const char *irk);
-    bool setModuleCSRK(const char *csrk);
-
-    bool processHCIEvents(const char *data, unsigned int len);
-    bool processEventGAPDeviceDone(const char *data, unsigned int len);
-    bool processEventGAPDeviceDiscovery(const char *data, unsigned int len);
-    bool processEventGAPLinkEstablished(const char *data, unsigned int len);
-    bool processEventGAPLinkTerminated(const char *data, unsigned int len);
-    bool processEventGAPDeviceInfomation(const char *data, unsigned int len);
-    bool processEventGAPHCIExtCommandStatus(const char *data, unsigned int len);
-    bool processEventATTReadByTypeResponse(const char *data, unsigned int len);
-    bool processEventATTWriteResponse(const char *data, unsigned int len);
-    bool processEventATTHandleValueNotification(const char *data, unsigned int len);
-    bool processEventNoMatch(const char *data, unsigned int len);
+    bool processHCIEvents(std::vector<char> data);
+    bool processEventGAPDeviceDone(std::vector<char> data);
+    bool processEventGAPDeviceInfomation(std::vector<char> data);
+    bool processEventGAPDeviceDiscovery(std::vector<char> data);
+    bool processEventGAPLinkEstablished(std::vector<char> data);
+    bool processEventGAPLinkTerminated(std::vector<char> data);
+    bool processEventGAPHCIExtCommandStatus(std::vector<char> data);
+    bool processEventATTReadByTypeResponse(std::vector<char> data);
+    bool processEventATTWriteResponse(std::vector<char> data);
+    bool processEventATTHandleValueNotification(std::vector<char> data);
+    bool processEventNoMatch(std::vector<char> data);
+    double calculateDistance(char txPower, char rssi);
 
 };
 

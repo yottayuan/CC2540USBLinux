@@ -1,7 +1,7 @@
 
 cmake_minimum_required(VERSION 2.6)
 project(CC2540)
-
+set(CMAKE_CXX_FLAGS "-O0")
 ## Target
 set(CC2540_HEADERS
     src/BLE.h
@@ -9,12 +9,14 @@ set(CC2540_HEADERS
     src/AsyncSerial.h
     src/HCICodes.h
     src/Singleton.h
+    src/CC2540USBDongle.h
 )
 set(CC2540_SRCS
     src/test.cpp
     src/AsyncSerial.cpp
     src/BLE.cpp
     src/BLEDevice.cpp
+    src/CC2540USBDongle.cpp
 )
 
 add_executable(CC2540 ${CC2540_SRCS} ${CC2540_HEADERS})

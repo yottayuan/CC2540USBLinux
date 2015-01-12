@@ -15,9 +15,11 @@
  */
 #include "BLE.h"
 #include "HCICodes.h"
+using namespace std;
+using namespace boost;
 using namespace framework;
 
-BLE::BLE():is_module_initialized(false), is_received(false) {
+BLE::BLE():module_initialized(false), send_cmd_completed(false), scan_finished(false){
 
 }
 
@@ -27,6 +29,7 @@ BLE::~BLE() {
 
 std::vector<char> BLE::getGAPCommand(unsigned char cmd, std::vector<char> data) {
     std::vector<char> output;
+    send_cmd_completed = false;
     output.clear();
     output.push_back(COMMAND);
     switch (cmd) {
@@ -50,6 +53,7 @@ std::vector<char> BLE::getGAPCommand(unsigned char cmd, std::vector<char> data) 
 
     case GAP_DEVICE_DISCOVERY_REQUEST:
     {
+        scan_finished = false;
         output.push_back(cmd); // GAP CMD
         output.push_back(0xFE);
         output.push_back(0x03); // Data length
@@ -80,6 +84,14 @@ std::vector<char> BLE::getGAPCommand(unsigned char cmd, std::vector<char> data) 
         break;
     }
 
+    case GAP_SET_PARAMETER:
+    {
+        output.push_back(cmd); // GAP CMD
+        output.push_back(0xFE);
+        output.insert(output.end(),data.begin(), data.end());
+        break;
+    }
+
     default:
         break;
     }
@@ -89,6 +101,7 @@ std::vector<char> BLE::getGAPCommand(unsigned char cmd, std::vector<char> data) 
 
 std::vector<char> BLE::getGATTCommand(unsigned char cmd, std::vector<char> data) {
     std::vector<char> output;
+    send_cmd_completed = false;
     output.push_back(COMMAND);
     switch (cmd) {
     case GATT_DISCOVER_CHARACTERISTICS_BY_UUID:
@@ -105,8 +118,8 @@ std::vector<char> BLE::getGATTCommand(unsigned char cmd, std::vector<char> data)
 }
 
 void BLE::received(const char *data, unsigned int len) {
-    is_received = false;
-#if defined (DEBUG)
+    //lock_guard<mutex> l(readQueueMutex);
+#if defined (TEST_CODE)
     printf("============================================\n");
     for(int i = 0; i<len; i++) {
         printf("%02x:", (unsigned char)*(data+i));
@@ -114,16 +127,18 @@ void BLE::received(const char *data, unsigned int len) {
     }
     printf("\nDone !\n");
 #endif
-    processHCIEvents(data,len);
-    is_received = true;
+    received_data.clear();
+    received_data.insert(received_data.begin(), data, data+len);
+    processHCIEvents(received_data);
 }
 
-bool BLE::setDongleAddress(const char *addr) {
+bool BLE::setDongleAddress(std::vector<char> addr) {
     this->dongle_address.clear();
-    for (int i = 0; i < ADDR_LEN; i++) {
-        this->dongle_address.push_back(*(addr+i));
+    int end = ADDR_LEN + DEVICE_ADDR;
+    for (int i = DEVICE_ADDR; i < end; i++) {
+        this->dongle_address.push_back(addr[i]);
     }
-#if defined (DEBUG)
+#if defined (TEST_CODE)
     for (int i = 0; i < ADDR_LEN; i++) {
         printf("%02x ",(unsigned char)this->dongle_address[i]);
     }
@@ -137,98 +152,138 @@ bool BLE::getDongleAddress(std::vector<char> &addr) {
     return true;
 }
 
-bool BLE::setModuleStatus(bool status) {
-    is_module_initialized = status;
+bool BLE::isModuleInitialized() {
+    return module_initialized;
+}
+
+bool BLE::isSendCMDCompleted() {
+    return send_cmd_completed;
+}
+
+bool BLE::isScanFinished() {
+    return scan_finished;
+}
+
+bool BLE::clearDevicesList() {
+    devices_found.clear();
     return true;
 }
 
-bool BLE::getModuleStatus(bool &status) {
-    status = is_module_initialized;
+bool BLE::isValidAddr(string addr) {
     return true;
 }
 
-bool BLE::getModuleStatus() {
-    return is_module_initialized;
-}
+bool BLE::isiBeaconDevice(std::vector<char> data) {
+    // check data lenght
+    if (data[0x0F] != 0x1E) { // Check lenght of this message
+        return false;
+    }
 
-bool BLE::setModuleIRK(const char *irk) {
-    this->irk.clear();
-    for (int i = 0; i< IRK_LEN; i++) {
-        this->irk.push_back(*(irk+i));
+    char addr[6];
+    for(int i = RSP_DEVICE_ADDR; i< RSP_DEVICE_RSSI; i++) {
+        addr[i - RSP_DEVICE_ADDR] = data[i];
+    }
+    bool result = isValidAddr(std::string(addr));
+    if (!result) {
+        return false;
+    }
+    std::string device(addr);
+    if (device.empty()) return false;
+    // Check if device stored in this vector ?
+    //for(std::vector<string>::iterator it = devices_found.begin(); it != devices_found.end(); it++ ) {
+    std::size_t found = std::string::npos;
+    int device_position = -1;
+    for (int i = 0; i< devices_found.size(); i++) {
+        //
+        found = devices_found[i].find(device);
+        if (found != std::string::npos) {
+            device_position = i;
+            break;
+        }
+    }
+    device.append(1u,data[RSP_DEVICE_RSSI]);
+    if (found != std::string::npos) {
+#if 0
+        printf("Before remove device:\n");
+        for (int i = 0; i < devices_found.size(); i++) {
+            printf("%s\n", devices_found[i].c_str());
+        }
+#endif
+//        printf("Found current device in: %d, replace it !\n", device_position);
+        devices_found.erase(devices_found.begin()+device_position); // remove old result
+        devices_found.insert(devices_found.begin()+device_position,device); // instert new result
+#if 0
+        printf("After remove device:\n");
+        for (int i = 0; i < devices_found.size(); i++) {
+            printf("%s\n", devices_found[i].c_str());
+        }
+#endif
+    } else {
+        devices_found.push_back(device);
     }
     return true;
 }
 
-bool BLE::getModuleIRK(std::vector<char> &irk) {
-    irk = this->irk;
-    return true;
-}
-
-bool BLE::setModuleCSRK(const char *csrk) {
-    this->csrk.clear();
-    for (int i = 0; i< CSRK_LEN; i++) {
-        this->csrk.push_back(*(csrk+i));
-    }
-    return true;
-}
-
-bool BLE::getModuleCSRK(std::vector<char> &csrk) {
-    csrk = this->csrk;
-    return true;
-}
-
-bool BLE::processHCIEvents(const char *data, unsigned int len) {
+bool BLE::processHCIEvents(std::vector<char> data) {
     bool status = false;
+    //lock_guard<mutex> l(readQueueMutex);
     if((unsigned char)data[0] == EVENT) {
-#if defined (DEBUG)
+#if defined (TEST_CODE)
         printf("============================================\n");
         printf("Event code: %02x\n",(unsigned char)data[1]);
 #endif
         if((unsigned char)data[1] == VENDOR_SPECIFIC) {
-#if defined (DEBUG)
+#if defined (TEST_CODE)
             printf("Vendor Specific Event Code\n");
             printf("Data len: %d\n", data[2]);
             printf("Data Code: %02x%02x \n",(unsigned char)data[4], (unsigned char)data[3]);
 #endif
             if((unsigned char)data[4] == 0x06) { // GAP event
-#if defined (DEBUG)
+#if defined (DEBUG_MSG)
                 printf("GAP Event\n");
 #endif
                 if((unsigned char) data[3] == GAP_COMMAND_STATUS) {
-#if defined (DEBUG)
+#if defined (DEBUG_MSG)
                     printf("Got GAP Command Status\n");
 #endif
-                    if((unsigned char)data[7] == 0xFE) {
-                        if((unsigned char)data[8] == 0x00) {
-                            printf("GAP Device Initialization\n");
-                        }
+                    if(data[5] == 0x00) {
+#if defined (DEBUG_MSG)
+                        printf("Send command sucessfully !\n");
+#endif
+                        send_cmd_completed = true;
+                        processEventGAPHCIExtCommandStatus(data);
+                    } else {
+#if defined (DEBUG_MSG)
+                        printf("Send command failed !\n");
+#endif
+                        send_cmd_completed = false;
                     }
                 } else if ((unsigned char)data[3] == GAP_DEVICE_INIT_DONE) {
-#if defined (DEBUG)
+#if defined (DEBUG_MSG)
                     printf("GAP Device Init Done\n");
 #endif
                     if(data[5] == 0x00) { //Success
-#if defined (DEBUG)
+#if defined (DEBUG_MSG)
                         printf("Device initialized and ready\n");
 #endif
-                        processEventGAPDeviceDone(data, len);
+                        processEventGAPDeviceDone(data);
                     }
                 } else if ((unsigned char) data[3] == GAP_DEVICE_INFOMATION) {
-#if defined (DEBUG)
+#if defined (DEBUG_MSG)
                     printf("GAP Device Infomation\n");
 #endif
-                    processEventGAPDeviceInfomation(data, len);
+                    processEventGAPDeviceInfomation(data);
                 } else if ((unsigned char) data[3] == GAP_DEVICE_DISCOVERY) {
-#if defined (DEBUG)
+#if defined (DEBUG_MSG)
                     printf("GAP Device Discovery\n");
 #endif
-                    processEventGAPDeviceDiscovery(data, len);
+                    processEventGAPDeviceDiscovery(data);
                 }
             }
         } else if ((unsigned char)data[1] == LOW_ENERGY) {
 
         } else if ((unsigned char)data[1] == COMMAND_COMPLETE) {
-#if defined (DEBUG)
+#if defined (TEST_CODE)
             printf("Command complete !\n");
             printf("Data len: %d\n", data[2]);
             printf("Data Code: %02x%02x \n",(unsigned char)data[4], (unsigned char)data[3]);
@@ -248,66 +303,20 @@ bool BLE::processHCIEvents(const char *data, unsigned int len) {
     return status;
 }
 
-bool BLE::processEventGAPDeviceDone(const char *data, unsigned int len) {
-    setDongleAddress(data+ADDR_POS);
-    setModuleIRK(data+IRK_POS);
-    setModuleCSRK(data+CSRK_POS);
-    setModuleStatus(true);
-    return true;
-}
-
-bool BLE::processEventGAPDeviceDiscovery(const char *data, unsigned int len) {
-    if(data[DEVICE_DISCOVERY_STATUS_POS] == 0x00) {
-        number_of_device_found = data[DEVICE_DISCOVERY_STATUS_POS + 1];
-        if(number_of_device_found == 0) {
-//#if defined (DEBUG)
-            printf("Device discovery done, no device found\n");
-//#endif
-        } else {
-            printf("Device discovery done, found %d device(s)\n", number_of_device_found);
-            if(devices_list != NULL) {
-                delete [] devices_list;
-            }
-            devices_list = new BLEDevice[number_of_device_found];
-#if defined (DEBUG)
-            for(int i = 0; i< devices_found.size(); i++) {
-                std::string device = devices_found[i];
-                //device = device.substr(0x08, 0x0F);
-                for(int j = 0; j < device.size(); j++) {
-                    printf("%02x ", (unsigned char)device[j]);
-                }
-                printf("\n");
-            }
+bool BLE::processEventGAPDeviceDone(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
+#if defined (DEBUG_MSG)
+    printf("processEventGAPDeviceDone()\n");
 #endif
-            for(int i = 0; i< number_of_device_found; i++) {
-                BLEDevice *device = new BLEDevice(devices_found[i].c_str(),devices_found[i].size());
-                devices_list[i] = *device;
-                char *addr;
-                addr = device->getAddress();
-                printf("Addr: ");
-                for(int j = 0; j < 0x06; j++) {
-                    printf("%02x ", (unsigned char)addr[j]);
-                }
-                printf ("\n");
-                char rssi;
-                device->getRSSIValue(rssi);
-                printf ("RSSI: %d\n",rssi);
-
-            }
-        }
-    }
+    setDongleAddress(data);
+//    setModuleIRK(data+IRK_POS);
+//    setModuleCSRK(data+CSRK_POS);
+    module_initialized = true;
     return true;
 }
 
-bool BLE::processEventGAPLinkEstablished(const char *data, unsigned int len) {
-    return true;
-}
-
-bool BLE::processEventGAPLinkTerminated(const char *data, unsigned int len) {
-    return true;
-}
-
-bool BLE::processEventGAPDeviceInfomation(const char *data, unsigned int len) {
+bool BLE::processEventGAPDeviceInfomation(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
     // 0x05: status
     // 0x06: event type
     //          0x00: Connectable undirected advertisement
@@ -320,67 +329,111 @@ bool BLE::processEventGAPDeviceInfomation(const char *data, unsigned int len) {
     // 0x0E: rssi
     // 0x0F: dataLen
     // 0x10: dataField
-    if (data[DEVICE_INFOMATION_STATUS_POS] == 0x00) {
+    if (data[DEVICE_INFOMATION_STATUS] == 0x00) {
 //        BLEDevice device = BLEDevice();
 //        device.setEventType((unsigned char)data[DEVICE_INFOMATION_STATUS_POS +1]);
 //        device.setAddressType((unsigned char)data[DEVICE_INFOMATION_STATUS_POS +2]);
 //        device.setAddress(data+DEVICE_INFOMATION_STATUS_POS +3);
 //        device.setRSSIValue((unsigned char)data[data+DEVICE_INFOMATION_STATUS_POS +9]);
-
-        std::string device (data, len);
-        device = device.substr(DEVICE_INFOMATION_STATUS_POS + 3);
-#if defined (DEBUG)
+#if defined (TEST_CODE)
         printf("\nDevice: ");
-        for(int i = 0; i <device.size(); i++) {
-            printf("%02x: %c ", (unsigned char)device[i], (unsigned char)device[i]);
+        for(int i = 0; i <data.size(); i++) {
+            printf("%02x ", (unsigned char)data[i]);
         }
         printf("\n");
 #endif
-        if(data[DEVICE_INFOMATION_STATUS_POS+1] == 0x00) { // Event type
-#if defined (DEBUG)
+        if(data[DEVICE_INFOMATION_STATUS+1] == 0x00) { // Connectable undirected advertisement
+#if defined (TEST_CODE)
             printf("\nDevice: ");
-            for(int i = 0; i <device.size(); i++) {
-                printf("%02x ", (unsigned char)device[i]);
+            for(int i = 0; i <data.size(); i++) {
+                printf("%02x ", (unsigned char)data[i]);
             }
             printf("\n");
 #endif
-            devices_found.push_back(device);
-        } else if (data[DEVICE_INFOMATION_STATUS_POS+1] == 0x04) {
+            bool result = isiBeaconDevice(data);
+            if (!result) return false;
+        } else if (data[DEVICE_INFOMATION_STATUS+1] == 0x04) {
 
 
         }
-//        printf("Found device :");
-//        unsigned char rssi = 0;
-//        std::vector<char> addr;
-//        device.getAddress(addr);
-//        for (int i = 0; i< 0x06; i++) {
-//            printf("");
-//        }
-//        device.getRSSIValue(rssi);
-//        printf("with RSSI: %02x\n", rssi);
     } else {
 
     }
     return true;
 }
 
-bool BLE::processEventGAPHCIExtCommandStatus(const char *data, unsigned int len) {
+bool BLE::processEventGAPDeviceDiscovery(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
+    if(data[DEVICE_DISCOVERY_STATUS] == 0x00) {
+        number_of_device_found = data[DEVICE_DISCOVERY_STATUS + 1];
+        if(number_of_device_found == 0) {
+//#if defined (DEBUG)
+            printf("Device discovery done, no device found\n");
+//#endif
+        } else {
+            printf("Device discovery done, found %d device(s)\n", number_of_device_found);
+#if 1//defined (TEST_CODE)
+            for(int i = 0; i< devices_found.size(); i++) {
+                std::string device = devices_found[i];
+                for(int j = 0; j < device.size(); j++) {
+                    printf("%02x ", (unsigned char)device[j]);
+                }
+                printf("\n");
+            }
+#endif
+            //devices_found.clear();
+        }
+    }
+    scan_finished = true;
     return true;
 }
 
-bool BLE::processEventATTReadByTypeResponse(const char *data, unsigned int len) {
+bool BLE::processEventGAPLinkEstablished(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
     return true;
 }
 
-bool BLE::processEventATTWriteResponse(const char *data, unsigned int len) {
+bool BLE::processEventGAPLinkTerminated(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
     return true;
 }
 
-bool BLE::processEventATTHandleValueNotification(const char *data, unsigned int len) {
+bool BLE::processEventGAPHCIExtCommandStatus(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
     return true;
 }
 
-bool BLE::processEventNoMatch(const char *data, unsigned int len) {
+bool BLE::processEventATTReadByTypeResponse(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
     return true;
 }
 
+bool BLE::processEventATTWriteResponse(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
+    return true;
+}
+
+bool BLE::processEventATTHandleValueNotification(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
+    return true;
+}
+
+bool BLE::processEventNoMatch(std::vector<char> data) {
+    lock_guard<mutex> l(readQueueMutex);
+    return true;
+}
+
+double BLE::calculateDistance(char txPower, char rssi) {
+    if (rssi == 0) {
+        return -1.0; // if we cannot determine accuracy, return -1.
+    }
+
+    double ratio = rssi*1.0/txPower;
+    if (ratio < 1.0) {
+        return pow(ratio,10);
+    }
+    else {
+        double accuracy =  (0.89976)*pow(ratio,7.7095) + 0.111;
+        return accuracy;
+    }
+}
