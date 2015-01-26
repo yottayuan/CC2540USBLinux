@@ -10,6 +10,7 @@ set(CC2540_HEADERS
     src/HCICodes.h
     src/Singleton.h
     src/CC2540USBDongle.h
+    src/LogToFile.h
 )
 set(CC2540_SRCS
     src/test.cpp
@@ -17,6 +18,7 @@ set(CC2540_SRCS
     src/BLE.cpp
     src/BLEDevice.cpp
     src/CC2540USBDongle.cpp
+    src/LogToFile.cpp
 )
 
 add_executable(CC2540 ${CC2540_SRCS} ${CC2540_HEADERS})

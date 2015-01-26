@@ -3,7 +3,8 @@ using namespace framework;
 
 CC2540USBDongle::CC2540USBDongle() {
     if(serial == NULL) {
-        serial = new CallbackAsyncSerial("/dev/ttyACM0",115200);
+        //serial = new CallbackAsyncSerial("/dev/ttyACM0",115200);
+        serial = new CallbackAsyncSerial("/dev/ttyUSB0",57600);
         serial->setCallback(boost::bind(&BLE::received,BLE::Instance(),_1,_2));
     }
 }
@@ -52,7 +53,7 @@ bool CC2540USBDongle::init() {
 bool CC2540USBDongle::scan() {
     std::vector<char> data;
     std::vector<char> cmd = BLE::Instance()->getGAPCommand(GAP_DEVICE_DISCOVERY_REQUEST,data);
-    printf("Send discovery command\n");
+    //printf("Send discovery command\n");
     serial->write(cmd);
 }
 

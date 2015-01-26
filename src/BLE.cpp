@@ -15,6 +15,7 @@
  */
 #include "BLE.h"
 #include "HCICodes.h"
+#include "LogToFile.h"
 using namespace std;
 using namespace boost;
 using namespace framework;
@@ -119,7 +120,7 @@ std::vector<char> BLE::getGATTCommand(unsigned char cmd, std::vector<char> data)
 
 void BLE::received(const char *data, unsigned int len) {
     //lock_guard<mutex> l(readQueueMutex);
-#if defined (TEST_CODE)
+#if 1//defined (TEST_CODE)
     printf("============================================\n");
     for(int i = 0; i<len; i++) {
         printf("%02x:", (unsigned char)*(data+i));
@@ -367,21 +368,31 @@ bool BLE::processEventGAPDeviceDiscovery(std::vector<char> data) {
     if(data[DEVICE_DISCOVERY_STATUS] == 0x00) {
         number_of_device_found = data[DEVICE_DISCOVERY_STATUS + 1];
         if(number_of_device_found == 0) {
-//#if defined (DEBUG)
+#if defined (DEBUG_MSG)
             printf("Device discovery done, no device found\n");
-//#endif
+#endif
         } else {
+#if defined (DEBUG_MSG)
             printf("Device discovery done, found %d device(s)\n", number_of_device_found);
-#if 1//defined (TEST_CODE)
+#endif
+#if defined (TEST_CODE)
             for(int i = 0; i< devices_found.size(); i++) {
                 std::string device = devices_found[i];
-                for(int j = 0; j < device.size(); j++) {
-                    printf("%02x ", (unsigned char)device[j]);
+                for (int j = 0; j < device.size(); j++) {
+                    if( j != 6) printf("%02x:", (unsigned char)device[j]);
+                    else  {
+                        printf(" %d", device[j]);
+                        float value = calculateDistance(0xCD,device[j]);
+                        printf ( " %4.2f",value);
+                    }
                 }
-                printf("\n");
+                printf("    ");
             }
+            printf("\n");
 #endif
+            LogToFile::Instance()->writeVectorToFile(devices_found);
             //devices_found.clear();
+            //LogToFile::Instance()->writeVectorToFile(devices_found);
         }
     }
     scan_finished = true;
