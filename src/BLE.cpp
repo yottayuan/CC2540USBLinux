@@ -289,7 +289,7 @@ bool BLE::processHCIEvents(std::vector<char> data) {
             printf("Data len: %d\n", data[2]);
             printf("Data Code: %02x%02x \n",(unsigned char)data[4], (unsigned char)data[3]);
             printf("Data: ");
-            for (int var = 5; var < len; var++) {
+            for (int var = 5; var < data.size(); var++) {
                 printf("%02x:",(unsigned char) data[var]);
             }
             printf("\n");
@@ -344,7 +344,7 @@ bool BLE::processEventGAPDeviceInfomation(std::vector<char> data) {
         printf("\n");
 #endif
         if(data[DEVICE_INFOMATION_STATUS+1] == 0x00) { // Connectable undirected advertisement
-#if defined (TEST_CODE)
+#if 1//defined (TEST_CODE)
             printf("\nDevice: ");
             for(int i = 0; i <data.size(); i++) {
                 printf("%02x ", (unsigned char)data[i]);
@@ -372,7 +372,7 @@ bool BLE::processEventGAPDeviceDiscovery(std::vector<char> data) {
             printf("Device discovery done, no device found\n");
 #endif
         } else {
-#if defined (DEBUG_MSG)
+#if 1//defined (DEBUG_MSG)
             printf("Device discovery done, found %d device(s)\n", number_of_device_found);
 #endif
 #if defined (TEST_CODE)

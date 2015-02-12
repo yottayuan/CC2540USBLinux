@@ -4,7 +4,7 @@ using namespace framework;
 CC2540USBDongle::CC2540USBDongle() {
     if(serial == NULL) {
         //serial = new CallbackAsyncSerial("/dev/ttyACM0",115200);
-        serial = new CallbackAsyncSerial("/dev/ttyUSB0",57600);
+        serial = new CallbackAsyncSerial("/dev/ttyUSB0",115200);
         serial->setCallback(boost::bind(&BLE::received,BLE::Instance(),_1,_2));
     }
 }
